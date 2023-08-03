@@ -1,0 +1,244 @@
+'MacroName:ID_Sus_Charac
+'MacroDescription:Tries to identify non-compliant characters by looking for & in strings. Acting as a failsafe to the diacritic converting macro.
+
+Declare Function StringCounter (yourString$, find$) As Integer
+Declare Function FindReplace(find$, replace$, yourString$) As String
+
+Option Explicit
+
+Sub Main
+   
+   Dim CS As Object
+On Error Resume Next
+   Set CS = GetObject(,"Connex.Client")
+On Error GoTo 0
+   If CS Is Nothing Then
+      Set CS = CreateObject("Connex.Client")
+   End If
+   
+'======================================================================================================================================================
+'Unicode checker
+'======================================================================================================================================================
+   
+   
+   Dim uniResult As String
+   uniResult = "Looked for characters Connexion doesn't like."
+           
+
+     '-----/variables----------
+   
+   Dim holder, fieldInstance, listholder, susCount As Integer
+   holder = 1
+   fieldInstance = 1
+   listHolder = 1
+   susCount = 0
+   
+   Dim x, y, i As Integer      
+   x = 0
+   y = 0
+   
+   Dim fieldTag, lastTime, lineBreak, uniResultContext, hexCode, fieldContent, fieldContentHex As String   
+   lineBreak = Chr(10)
+
+   'array
+   Dim contextList() As Variant
+
+   
+      'Loop until no more lines to check
+    
+      '|------------------------------------------------------------------------loop 1-----------------------------------------------------------------------------------
+      Do Until CS.GetFieldLine(holder, fieldContent) = False
+      
+            '/this one displays "..." unicode as &:            
+            CS.GetFieldLine holder, fieldContent
+            
+            
+            fieldTag = Mid(fieldContent, 1, 3)
+            
+            
+            If fieldTag = lastTime Then
+            
+               fieldInstance = fieldInstance + 1
+            
+            Else
+            
+               fieldInstance = 1
+
+            End If
+                        
+            '/this one displays "..." as hex:
+            CS.GetField fieldTag, fieldInstance, fieldContentHex
+            
+            Dim length as Integer
+            
+            length = Len(fieldContentHex)
+            
+            'This is just a control to reduce unneccessary processing.
+            If InStr(fieldContentHex, "&") Then
+            
+            '/this loop iterates through every character in a line and checks if it is an &. If it is it will then check if it is a hex code when fetched or not.
+            'this is vital in differentiating between a bad "..." which displays only as "&" in field content hex and a regular, good "&".
+            
+            '|------------------------------------------------------loop 2----------------------------------------------------------------------------------
+            For i = 1 To Len(fieldContentHex)
+            
+               If i = length + 1 Then
+                  Exit Do
+               End If
+               
+
+               If InStr(Mid(fieldContentHex, i, 1), "&") Then
+                  
+                  
+                     If Mid(fieldContent, i, 2) <> Mid(fieldContentHex, i, 2) Then
+                           
+                           hexCode = Mid(fieldContentHex, i, Len(fieldContentHex))
+                        
+                           hexCode = Left(hexCode, InStr(hexCode, ";"))
+
+                           '-----------------------------------loop 3 end----------------------------------------------|
+                           
+                           y = 0
+                           
+                           'For display purposes
+                           fieldContentHex = FindReplace(hexCode, "[?]", fieldContentHex)
+                           
+                           '/put the hexcode and it's string in arrays to work with later:
+   
+                              x = x + 1
+                              
+                              ReDim Preserve contextList(x)
+
+                        
+                     End If
+
+               
+               End If
+ 
+            
+            Next i
+            '-----------------------------------------------------------loop 2 end----------------------------------------------------------------------------|
+            If InStr(fieldContentHex, "[?]") Then
+                           
+               'Make string that makes it easy for user to see where problem is            
+               contextList(x) = lineBreak & "> " & fieldTag & " (" & fieldInstance & ")  " & Mid(fieldContentHex, 5, Len(fieldContentHex)) & lineBreak
+                              
+            End If   
+            
+        'control if statement    
+        End If
+            
+            holder = holder + 1
+            listHolder = listHolder + 1
+            lastTime = fieldTag
+            
+
+            Loop
+            '------------------------------------------------------------------------loop 1 end--------------------------------------------------------------------------------|
+     
+   holder = 0 
+   CS.GetField fieldTag, fieldInstance, fieldContentHex
+
+
+   
+   '/----------putting things nicely in a variable for later display--------
+   Dim z As Integer
+
+   z = 1
+
+   Do Until z >= (x + 1)
+
+      uniResultContext = uniResultContext + contextList(z)
+      z = z + 1
+      
+   Loop 
+
+   susCount = StringCounter(uniResultContext, "[?]")
+
+   If susCount >= 1 Then
+   
+      'just replacing delimiter symbol with more recognisable one...
+      uniResultContext = FindReplace("ß", "$", uniResultContext)
+      uniResultContext = FindReplace("å", "", uniResultContext) 'healthy diacritic, removing from display otherwise confusing.
+      
+                                 
+   End If
+   
+   If susCount >= 1 Then
+      MsgBox("Found " & susCount & " suspicious characters. Please adjust any [?] manually in your record:" & lineBreak & uniResultContext)    
+   End If 
+      
+End Sub
+
+'=====================================================================================
+'This is a function that counts stuff in a field for you
+'=====================================================================================
+
+ Function StringCounter(yourString$, find$)
+    
+   If InStr(yourString$, find$) Then
+   
+   Dim stopLoop As Integer
+   Dim rightCut As String
+   Dim count As Integer
+   Dim editedString As String
+   
+   editedString = yourString$
+   
+   stopLoop = 1
+   
+      Do Until stopLoop = 0
+         
+         rightCut = Mid(editedString, InStr(editedString, find$) + Len(find$), Len(editedString))
+         editedString = rightCut
+         count = count + 1
+         stopLoop = InStr(editedString, find$)
+         
+      Loop
+      
+   End If
+   
+   
+   
+   StringCounter = count
+   End Function
+'/==================================================================================
+Function FindReplace(find$, replace$, yourString$)
+'/==================================================================================   
+   Dim CS As Object
+   On Error Resume Next
+   Set CS  = GetObject(,"Connex.Client")
+   On Error GoTo 0
+   If CS  Is Nothing Then
+      Set CS  = CreateObject("Connex.Client")
+   End If
+   
+   Dim editedString As String
+   Dim stopLoop As Integer
+   Dim leftCut As String
+   Dim rightCut As String
+   
+   editedString = yourString$
+   
+   stopLoop = 1
+   
+   If InStr(yourString$, find$) Then
+   
+      Do Until stopLoop = 0
+   
+         leftCut = Left(editedString, InStr(editedString, find$) - 1)
+         rightCut = Mid(editedString, InStr(editedString, find$) + Len(find$), Len(editedString))
+      
+         editedString = leftCut + replace$ + rightCut
+      
+         stopLoop = InStr(editedString, find$)
+      
+   Loop
+   
+   End If
+
+
+   FindReplace = editedString
+   
+End Function
+
