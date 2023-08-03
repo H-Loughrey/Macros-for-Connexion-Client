@@ -1,5 +1,5 @@
 'MacroName:ID_Sus_Charac
-'MacroDescription:Tries to identify non-compliant characters by looking for & in strings. Acting as a failsafe to the diacritic converting macro.
+'MacroDescription:Tries to identify non-compliant characters by looking for & in strings.
 
 Declare Function StringCounter (yourString$, find$) As Integer
 Declare Function FindReplace(find$, replace$, yourString$) As String
@@ -15,12 +15,7 @@ On Error GoTo 0
    If CS Is Nothing Then
       Set CS = CreateObject("Connex.Client")
    End If
-   
-'======================================================================================================================================================
-'Unicode checker
-'======================================================================================================================================================
-   
-   
+
    Dim uniResult As String
    uniResult = "Looked for characters Connexion doesn't like."
            
@@ -171,35 +166,25 @@ On Error GoTo 0
 End Sub
 
 '=====================================================================================
-'This is a function that counts stuff in a field for you
+Function StringCounter(yourString, find)
 '=====================================================================================
+'Counts stuff in a field for you
 
- Function StringCounter(yourString$, find$)
-    
-   If InStr(yourString$, find$) Then
+   If InStr(yourString, find) > 0 Then
+
+      Dim rightCut, editedString As String
+      Dim count As Integer
    
-   Dim stopLoop As Integer
-   Dim rightCut As String
-   Dim count As Integer
-   Dim editedString As String
+      editedString = yourString
    
-   editedString = yourString$
-   
-   stopLoop = 1
-   
-      Do Until stopLoop = 0
-         
-         rightCut = Mid(editedString, InStr(editedString, find$) + Len(find$), Len(editedString))
+      Do Until InStr(editedString, find) = 0
+         rightCut = Mid(editedString, InStr(editedString, find) + Len(find), Len(editedString))
          editedString = rightCut
-         count = count + 1
-         stopLoop = InStr(editedString, find$)
-         
+         count = count + 1         
       Loop
       
    End If
-   
-   
-   
+
    StringCounter = count
    End Function
 '/==================================================================================
@@ -212,28 +197,18 @@ Function FindReplace(find$, replace$, yourString$)
    If CS  Is Nothing Then
       Set CS  = CreateObject("Connex.Client")
    End If
-   
-   Dim editedString As String
-   Dim stopLoop As Integer
-   Dim leftCut As String
-   Dim rightCut As String
+
+   Dim editedString, leftCut, rightCut As String
    
    editedString = yourString$
-   
-   stopLoop = 1
-   
+
    If InStr(yourString$, find$) Then
    
-      Do Until stopLoop = 0
-   
+      Do Until InStr(editedString, find$) = 0
          leftCut = Left(editedString, InStr(editedString, find$) - 1)
          rightCut = Mid(editedString, InStr(editedString, find$) + Len(find$), Len(editedString))
-      
          editedString = leftCut + replace$ + rightCut
-      
-         stopLoop = InStr(editedString, find$)
-      
-   Loop
+      Loop
    
    End If
 
