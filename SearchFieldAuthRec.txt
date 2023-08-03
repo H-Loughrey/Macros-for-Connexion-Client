@@ -1,0 +1,324 @@
+'MacroName:SearchFieldAuthRec
+'MacroDescription: Only for name authority records. Gets active field text, trims appropriately, searches it.
+'Made by: Hazel Loughrey NLNZ
+'Last edit: 03/08/2023
+
+Declare Function FindReplace(find$, replace$, yourString$) As String
+Declare Function StringCounter (yourString$, find$) As Integer
+Declare Function QuestionBox(searchString$) As Variant
+Declare Function GetSubfield(targetField, targetTag) As String
+
+
+Sub Main
+   
+   Dim CS As Object
+On Error Resume Next
+   Set CS = GetObject(,"Connex.Client")
+On Error GoTo 0
+   If CS Is Nothing Then
+      Set CS = CreateObject("Connex.Client")
+   End If
+   
+   Dim delimiter As String
+   delimiter = Chr$( 223 )
+   
+   Dim subjectSubfields() As Variant
+   
+   '---Get active field---
+   activeField = CS.CursorRow   
+   CS.GetFieldLine activeField, activeFieldText
+   
+   
+   '---trim off the field tag...---
+   fieldTag = Left(activeFieldText, 3)
+   activeFieldText = Mid(activeFieldText, 6, Len(activeFieldText))
+   
+
+  
+   If activeFieldText = "" Then
+   
+      MsgBox "This field is empty! Please try again."
+      Exit Sub 
+     
+   ElseIf Left(fieldTag, 1) <> "1" And Left(fieldTag, 1) <> "4" And Left(fieldTag, 1) <> "5" And fieldTag <> "374" Then
+   
+      MsgBox "Sorry! This macro can only search for 1xx, 4xx and 5xx fields (374 can't be done). Ask Hazel if you want more functionality. (Rejected field tag: " + fieldTag + ")"
+    
+      Exit Sub 
+   
+   End If
+   
+   '==================search that database!==================
+   
+   Select Case fieldTag
+   
+   '-----------------------
+   Case "100", "400", "500"
+   '-----------------------
+      
+      activeFieldText = GetSubfield(activeFieldText, "a")
+      
+      'function adds $a to front for delimination, we need to remove to search
+      activeFieldText = Mid(activeFieldText, 4, len(activeFieldText))
+
+      CS.Browse "AF","pn",activeFieldText
+      Msgbox("Searching for: " + activefieldtext)
+   
+   '--------------------------------------------
+   Case "110", "111", "410", "411", "510", "511"
+   '--------------------------------------------
+      
+      activeFieldText = GetSubfield(activeFieldText, "a")
+      'function adds $a to front for delimination, we need to remove to search
+      activeFieldText = Mid(activeFieldText, 4, len(activeFieldText))
+      
+      CS.Browse "AF","co",activeFieldText
+      Msgbox("Searching for: " + activefieldtext)
+   
+   '----------
+   'Case "374" 
+   '----------
+   'Not working sufficiently, turned off. -Hazel 16/11/22
+   
+   'Specifically: This search will bring up expanded topic search and if the search _happens_ that boolean is true. It can't tell you
+   ' if your term is actually valid - it can't even tell you if the term is in the list. You can't get the text values from a list of search results 
+   '(all the copy functions only work in records). You could theoretically open the record and grab maybe the window title but there are two problems: 
+   '1) There are 1-3 selections to be made and this is unpredictable, 2) (unlikely) If anything ever goes wrong either with this macro through user error we could damage subject records. 
+   
+   'AS IS:
+   'This would require the user to accurately determine validity. I think this part of the macro would end up potentially increasing errors as
+   ' it is not clear when you've made a typo. E.g. "Lawyeer" when searched, will display "Lawyer." Variants will appear
+   'too, I think with '[450]' under them. I think this tool will discourage careful checking of validity and mistakes could be made.
+
+     
+   'not using getsubfield function because how to get arrays from functions in OML is a secret between God and OCLC   
+      'x = 1
+   
+      'Gets subfields, adds each to array, cycles them through searches. This is so we can handle multiple subfields
+      'Do Until InStr(activeFieldText, delimiter) = 0
+      
+     'If InStr(activeFieldText, delimiter) < Len(activeFieldText) Then
+   
+            'delimPos = InStr(activeFieldText, delimiter)
+         'Else
+   
+            'delimPos = Len(activeFieldText)
+         'End If
+   
+         'ReDim Preserve subjectSubfields(x)
+
+         'subjectSubfields(x) = Mid(activeFieldText, 1, delimPos - 2)
+         
+         'activeFieldText = Mid(activefieldtext, delimPos + 3, Len(activeFieldText) - delimPos + 3)
+   
+            'search each in array
+         'CS.Browse "AF","su",subjectSubfields(x)
+         'CS.BrowseAuthorityExpanded 25,"","",""
+         
+         'QuestionBox(subjectSubfields(x))
+         
+         'x = x + 1
+      'Loop
+      
+      'If activefieldtext <> "" And activefieldtext <> "lcsh" Then
+      
+         'CS.Browse "AF","su",activeFieldText
+         'CS.BrowseAuthorityExpanded 25,"",activeFieldText,activeFieldText
+         
+         'QuestionBox(activefieldtext)
+         'CS.CloseList
+         'MsgBox("Are you missing $2 lcsh in your 374 field?")
+         
+      'Else
+      
+         'CS.CloseList
+         'CS.CloseList 
+      
+      'End If
+         
+   End Select
+   
+   
+End Sub
+
+'===========================================   
+Function QuestionBox(searchString$)
+'===========================================  
+
+   Dim CS As Object             : On Error Resume Next
+ Set CS     = GetObject(,"Connex.Client")
+ On Error GoTo 0
+ If CS     Is Nothing Then
+   Set CS     = CreateObject("Connex.Client")
+ End If
+ 
+ delimiter = Chr$( 223 )
+
+StartDialogReview:
+' accross, down, width, height   
+Begin Dialog Review 160, 50, "Please review"
+   Text  5, 10, 150, 30, "If it has [150] under it is valid. If not, don't use it!"
+   PushButton  60, 30, 39, 15, "Next", .no
+End Dialog
+  
+   Dim BoxInfo2 As Review
+   Dim BoxInput2 As Integer
+   
+   BoxInput2 = Dialog(BoxInfo2)
+   
+   
+   
+   Select Case BoxInput2
+   
+   Case 0 'Next
+   
+   CS.CloseList      
+
+   End Select
+ 
+End Function
+
+
+'Function adjusted to remove character after target too
+'/==================================================================================
+Function FindReplace(find$, replace$, yourString$)
+'/==================================================================================   
+   Dim CS As Object
+   On Error Resume Next
+   Set CS  = GetObject(,"Connex.Client")
+   On Error GoTo 0
+   If CS  Is Nothing Then
+      Set CS  = CreateObject("Connex.Client")
+   End If
+   
+   Dim editedString As String
+   Dim stopLoop As Integer
+   Dim leftCut As String
+   Dim rightCut As String
+   
+   editedString = yourString$
+   
+   stopLoop = 1
+   
+   If InStr(yourString$, find$) Then
+   
+      Do Until stopLoop = 0
+   
+         leftCut = Left(editedString, InStr(editedString, find$) - 1)
+         rightCut = Mid(editedString, InStr(editedString, find$) + Len(find$) + 1, Len(editedString))
+      
+         editedString = leftCut + replace$ + rightCut
+      
+         stopLoop = InStr(editedString, find$)
+      
+   Loop
+   
+   End If
+
+
+   FindReplace = editedString
+   
+End Function
+
+'=====================================================================================
+'This is a function that counts stuff in a field for you
+'=====================================================================================
+
+ Function StringCounter(yourString$, find$)
+    
+   If InStr(yourString$, find$) Then
+   
+   Dim stopLoop As Integer
+   Dim rightCut As String
+   Dim count As Integer
+   Dim editedString As String
+   
+   editedString = yourString$
+   
+   stopLoop = 1
+   
+      Do Until stopLoop = 0
+         
+         rightCut = Mid(editedString, InStr(editedString, find$) + Len(find$), Len(editedString))
+         editedString = rightCut
+         count = count + 1
+         stopLoop = InStr(editedString, find$)
+         
+      Loop
+      
+   End If
+
+   StringCounter = count
+   End Function
+
+'=====================================================================================
+Function GetSubfield(targetField, targetTag)
+'=====================================================================================
+'REQUIRES STRINGCOUNTER.
+'Gets the all occurances of subfield. Returns them in a string.
+   Dim CS As Object
+   On Error Resume Next
+   Set CS  = GetObject(,"Connex.Client")
+   On Error GoTo 0
+   If CS  Is Nothing Then
+      Set CS  = CreateObject("Connex.Client")
+   End If
+   
+   Dim position, endStr, i, count As Integer
+   
+   targetTag = Chr$(223) + targetTag   
+
+   i = 0
+  
+   'adding $a to front because connexion doesn't let us have that first $a in a field...
+   If targetTag = Chr$(223) + "a" Then
+   
+      If InStr( Mid(targetField, 1, 3), Chr$(223) ) = 0 Then
+         targetField = Chr$(223) + "a" + targetField
+      End If
+   End If
+  
+   count = StringCounter(targetField, targetTag)
+
+   
+
+   '----------------------------------------------------------------
+   Do While i < count
+      
+      position = InStr(targetField, targetTag) + 2
+      
+      'plus one because I think mid() uses 0 indexing but instr() doesn't
+      targetField = Mid(targetField, position, len(targetField) - position + 1)
+
+      If InStr(targetField, Chr$(223)) Then
+         endStr = InStr(targetField, Chr$(223)) - 1
+      Else
+         endStr = len(targetField)
+      End If
+         
+      targetSubfield = Trim(Mid(targetField, 1, endStr))
+      
+      'put result in an array
+      ReDim Preserve resultArray(i)
+      resultArray(i) = targetSubfield
+
+  
+   i = i + 1   
+   Loop
+   '----------------------------------------------------------------
+   y = 0
+   
+   'Put the subfield tag in as a seperator
+   Do Until y >= i
+      result = result + targetTag + " " + resultArray(y) + " " 
+   y = y + 1
+   Loop   
+   
+   result = Trim(result)
+   GetSubfield = result
+   
+End Function
+
+
+
+
