@@ -1,5 +1,5 @@
 
-'MacroName:Add_ID_ByLC
+'MacroName:Bulk Changer
 'MacroDescription:Gets data from text file and runs set tasks over records
 'Created by: Hazel Loughrey (National Library)
 'Last edit: 01/08/2023
