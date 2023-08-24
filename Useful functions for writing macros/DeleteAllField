@@ -1,0 +1,40 @@
+'/put this above Sub Main:
+Declare Function DeleteAllField(tag) As Variant
+
+
+'/put this below End Sub:
+'=====================================================================================
+Function DeleteAllField(tag)
+'=====================================================================================
+'Deletes all instances of a specified field. Counts the fields, then deletes the fields.
+'Have to count them, as if you just delete them the instance of field will change as you go and it won't delete 
+'all of them.
+'Returns True if deletion has occured.
+
+Dim CS As Object
+   On Error Resume Next
+   Set CS  = GetObject(,"Connex.Client")
+   On Error GoTo 0
+   If CS Is Nothing Then Set CS  = CreateObject("Connex.Client")
+   
+   Dim x As Integer
+   Dim fieldVal as String
+   Dim bool As Variant
+   
+   bool = False
+   x = 1
+   
+   Do Until CS.GetField(tag, x, fieldVal) = False
+      x = x + 1
+   Loop
+   
+   x = x - 1
+   
+   Do Until CS.DeleteField (tag, x) = False
+      x = x - 1
+      bool = True  
+   Loop
+   
+   DeleteAllField = bool
+   
+End Function
