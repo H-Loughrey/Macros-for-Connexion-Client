@@ -1,0 +1,51 @@
+'==================================================================================
+'INFO: 
+'This function can find and replace things in a string. 
+'
+'e.g. To find all commas and replace them with fullstops in a string called test:
+'test = FindReplace(",", ".", test)
+
+'it can be longer than one character, e.g.:
+'test = FindReplace("moose", "camel", test)
+'==================================================================================
+
+
+'/put this above Sub main:
+Declare Function FindReplace(find, replace, yourString) As String
+
+
+
+'/put this below End sub:
+'/==================================================================================
+Function FindReplace(find, replace, yourString)
+'/==================================================================================   
+      Dim CS As Object
+   On Error Resume Next
+   Set CS  = GetObject(,"Connex.Client")
+   On Error GoTo 0
+   If CS  Is Nothing Then
+      Set CS  = CreateObject("Connex.Client")
+   End If
+   
+   Dim editedString,  leftCut, rightCut As String
+   
+   editedString = yourString
+   
+   If InStr(yourString, find) > 0 Then
+   
+      Do Until InStr(editedString, find) = 0
+   
+         leftCut = Left(editedString, InStr(editedString, find) - 1)
+         rightCut = Mid(editedString, InStr(editedString, find) + Len(find), Len(editedString))
+      
+         editedString = leftCut + replace + rightCut 
+      
+   Loop
+   
+   End If
+
+
+   FindReplace = editedString
+   
+End Function
+
