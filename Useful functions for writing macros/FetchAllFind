@@ -1,0 +1,55 @@
+'==================================================================================
+'INFO: 
+'This function gets all instances of a field and looks for a string. It then returns
+'true or false.
+'E.g. You want to know if any 373 contains "Musical groups":
+'FetchAllFind("373", "Musical groups")
+
+'If you display FetchAllFind in a message box you will see either 1 for true
+'or 0 for false. You can use it within other commands, e.g.:
+
+'If FetchAllFind("373", "Musical groups") = True Then
+	'Do something
+'End If
+'==================================================================================
+
+
+'/put this above Sub main:
+Declare Function FetchAllFind(field, find) As Variant
+
+'/put this below End Sub
+'/==================================================================================
+Function FetchAllFind(field, find)
+'Returns a boolean. True if find is found in any specified field
+'/================================================================================== 
+      Dim CS As Object
+   On Error Resume Next
+   Set CS  = GetObject(,"Connex.Client")
+   On Error GoTo 0
+   If CS  Is Nothing Then
+      Set CS  = CreateObject("Connex.Client")
+   End If
+
+   Dim tempString As String
+   Dim x As Integer
+   x = 1
+   
+   Dim bool As Variant
+   bool = False
+
+   Do Until CS.GetField(field, x, tempString) = False
+   
+      If InStr(tempString, find) <> 0 Then
+      
+         bool = True
+         
+         Exit Do
+ 
+      End If 
+      
+      x = x + 1 
+   
+   Loop
+
+   FetchAllFind = bool
+End Function
