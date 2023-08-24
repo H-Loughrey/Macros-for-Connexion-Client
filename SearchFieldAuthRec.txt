@@ -42,7 +42,7 @@ On Error GoTo 0
      
    ElseIf Left(fieldTag, 1) <> "1" And Left(fieldTag, 1) <> "4" And Left(fieldTag, 1) <> "5" And fieldTag <> "374" Then
    
-      MsgBox "Sorry! This macro can only search for 1xx, 4xx and 5xx fields (374 can't be done). Ask Hazel if you want more functionality. (Rejected field tag: " + fieldTag + ")"
+      MsgBox "Sorry! This macro can only search for 1xx, 4xx and 5xx fields (374 can't be done) (Rejected field tag: " + fieldTag + ")"
     
       Exit Sub 
    
@@ -78,7 +78,7 @@ On Error GoTo 0
    '----------
    'Case "374" 
    '----------
-   'Not working sufficiently, turned off. -Hazel 16/11/22
+   'Not working sufficiently, turned off.
    
    'Specifically: This search will bring up expanded topic search and if the search _happens_ that boolean is true. It can't tell you
    ' if your term is actually valid - it can't even tell you if the term is in the list. You can't get the text values from a list of search results 
