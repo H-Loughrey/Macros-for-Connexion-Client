@@ -1,0 +1,32 @@
+'==================================================================================
+'INFO: 
+'This function gets... indicators. Super simple but saves you some effort each time.
+'e.g. 
+'Your 100 field is '100 11 Smith, John'
+'GetIndicators("100", 1) will return "11"
+'==================================================================================
+
+'/put this above Sub Main:
+Declare Function GetIndicators(field, instance) As String
+
+'/put this below End Sub:
+'/==================================================================================
+Function GetIndicators(field, instance)
+'/==================================================================================
+   Dim CS As Object
+   On Error Resume Next
+   Set CS  = GetObject(,"Connex.Client")
+   On Error GoTo 0
+   If CS  Is Nothing Then
+      Set CS  = CreateObject("Connex.Client")
+   End If
+   
+	Dim tempString As String
+
+	CS.Getfield field, instance, tempString
+
+	tempString = Mid(tempString, 4, 2)
+
+	GetIndicators = tempString
+
+End Function
