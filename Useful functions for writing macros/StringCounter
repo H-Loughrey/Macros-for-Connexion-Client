@@ -1,0 +1,38 @@
+'==================================================================================
+'INFO: 
+'This function can count occurrences of a character in a string.
+'e.g. To find all commas in a string called test
+'variable = StringCounter(test, ",")
+'It will return how many times a comma was found in that string.
+'==================================================================================
+
+'/put this above Sub Main:
+Declare Function StringCounter(yourString, find) As Integer
+
+
+
+'/put this below End Sub:
+'=====================================================================================
+Function StringCounter(yourString, find)
+'=====================================================================================
+
+  If InStr(yourString, find) Then
+   
+      Dim count As Integer
+      Dim rightCut, editedString As String
+
+      editedString = yourString
+   
+      Do Until InStr(editedString, find) = 0
+         
+         rightCut = Mid(editedString, InStr(editedString, find) + Len(find), Len(editedString))
+         editedString = rightCut
+         count = count + 1
+         
+      Loop
+      
+   End If
+
+   StringCounter = count
+   End Function
+   
