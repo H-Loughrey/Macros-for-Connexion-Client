@@ -1,8 +1,8 @@
 
-'MacroName:Bulk Changer
+'MacroName:Add_ID_ByLC
 'MacroDescription:Gets data from text file and runs set tasks over records
 'Created by: Hazel Loughrey (National Library)
-'Last edit: 01/08/2023
+'Last edit: 21/08/2023
 
 '******************** Info *******************************************
 'Comma delimination between parts, new line between entities.
@@ -36,7 +36,7 @@ Global inputPath, outputPath
 Global lineValue() As Variant
 Global CS As Object
 Global username As String
-Global gDriveAddy As String
+Global driveaddy As String
 
 
 Option Explicit
@@ -56,7 +56,7 @@ On Error GoTo 0
   
   
 '===================================
-'Log in, get userName, find G drive
+'Log in, get userName, find shared drive
 '===================================
 
  '/Checks if online. If login details saved then logs you in. Otherwise tells user to log in and ends macro.
@@ -74,15 +74,37 @@ On Error GoTo 0
    
    'get computer username for file addresses
    username = (Environ("UserName"))
+   Dim addyError, addyCheck As String
+   addyError = ""
    
-   'EDIT ADDRESS AS NEEDED:
-    gDriveAddy = "G:\Fileplan\Bib_Services\Non-Clio_formats\NACO requests and authority work\Connexion\Connexion macros\Projects (Please leave)\Bulk local save files\"
+   
+   '*********   EDIT ADDRESS AS NEEDED:   ****************************************************************************************
+    driveAddy = "[your file address here]\*"
+   '******************************************************************************************************************************
+
+   'the dir function "returns a string representing the name of a file, directory, or folder". 16 = "directories or folders in addition to files with no attributes"
+   'This is just a means for us to check the macro can find the folder before attempting to save.
+   addyCheck = Dir(driveaddy, 16)
+
+    
+    If addyCheck = "" Then
+      addyError = addyError + chr(10) + "> drive not found. Attemped to access:" + chr(10) + chr(10) + driveaddy + chr(10) + chr(10)
+   'specified drive failed to be found, attempt C drive address instead
+      driveaddy = "C:\Users\" & userName & "\AppData\Roaming\OCLC\Connex\Db" 
       
-    If Dir(gDriveAddy) = "" Or Dir(gDriveAddy) = "Connex.ico" Then
-      Msgbox("ERROR: G drive file path not found. Check you are connected to the G drive. " + chr(10)+ chr(10) + "Otherwise check the gDriveAddy file path in the BulkAdder macro. Currently set to: " + chr(10) + chr(10) + gDriveAddy + chr(10) + chr(10) + "NOTE: Macro will now save to default local file instead.")
-      Exit Sub
+      If addyCheck = "" Then
+         addyError = addyError + chr(10) + "> C drive not found. Attemped to access:" + chr(10) + chr(10) + driveaddy + chr(10) + chr(10)
+      Else 
+         addyError = addyError + "Attempting to save to C:\Users\" & userName & "\AppData\Roaming\OCLC\Connex\Db"  + chr(10)
+
+      End If
     End If
    
+ If addyError <> "" Then
+   addyError = "==================== FILE PATH ERROR ===================" + chr(10) + chr(10) + addyError
+   addyError = addyError + "Check you are connected to the drive/s. Alternatively check address and/or code in the BulkAdder macro."
+   Msgbox(addyError)
+  End If
  
 '====================================
 'Dialogue box
@@ -106,8 +128,7 @@ On Error GoTo 0
    x = x +1 
    Loop
 
-   instructions = "Select a task. " & chr(10) & "You will need a text file containing LCCNs and data seperated by commas and hyphens (see example on main screen). " &chr(10)&chr(10) & "For input file path, get the file path and add a backslash followed by the file name including extension." & chr(10) & chr(10) & "E.g. \\wlgprdfile02\home$\loughrha\home\testFile.txt" & chr(10) & "If you are stuck or have suggestions talk to Hazel."
-
+   instructions = "Select a task. " & chr(10) & "You will need a text file containing LCCNs and data seperated by commas and hyphens (see example on main screen). " &chr(10)&chr(10) & "For input file path, get the file path and add a backslash followed by the file name including extension." & chr(10) & chr(10)
 DialogLabel:
 ' accross, down, width, height 
 Begin Dialog Interface 290, 200, "Bulk change"   
@@ -121,7 +142,6 @@ Begin Dialog Interface 290, 200, "Bulk change"
    GroupBox  5, 58, 280, 62, ""
    Text  10, 65, 230, 9, "Enter input file path, including file name and extension:"
    TextBox  10, 80, 270, 15, .inputPath
-   Text  10, 100, 230, 14, "E.g. \\wlgprdfile02\home$\loughrha\home\testFile.txt"
    Text  10, 130, 230, 56, "Expected format of data in text file: " & chr(10) & chr(10) & "LCCN, type: id, type: id" & chr(10) & "LCCN, type: id, type: id"& chr(10) & "etc."
  
    CancelButton  5, 182, 50, 14
@@ -164,7 +184,7 @@ End Dialog
    '--------------------
       
       '----Is file path accessible?------------------
-      If Dir(inputPath) = "" Or Dir(inputPath) = "Connex.ico" Then
+      If Dir(inputPath, 0) = "" Or Dir(inputPath, 0) = "Connex.ico" Then
          Msgbox("Input path not found. Did you forget the file name with extension? Please try again.")
          GoTo DialogLabel
       End If
@@ -297,11 +317,11 @@ TaskSelection:
                      findField = FetchAllFind("024", id)
                      findType = FetchAllFind("024", iType)
                         
-                     If findField = "True" Or findType = "True" Then
+                     If findField = True Or findType = True Then
                         outcome = outcome + " REJECTED: " & itype & " already exists."
                         outcome = FindReplace("-Line " & x & " (" & LCCN , ">Line " & x & " (" & LCCN, outcome)
                            
-                     ElseIf findField = "False" And findType = "False" Then
+                     ElseIf findField = False And findType = False Then
                         'LOCK RECORD
                         CS.Lock
                         If CS.AddField(1, FormatField("024", id, iType)) = True Then
@@ -397,13 +417,10 @@ Skip:
     
    End Select
 
-
-
-   
 '----------------------------------------------
 'Output results to text file
 '----------------------------------------------
-'Rename original text file to say it has been done
+
 dim oldName As String
 
 'trim off ".txt" if it is there
@@ -425,10 +442,6 @@ Close #1
    Erase lineValue
    
    CS.Search "AL","AND ro:'SFNumber'"
-   
-   'Disabled for now - enable if you want to loop through every record in the file
-   'CS.RunMacro("BulkChanger.mbk!Review")
-
 
 'Set back to default. If Connexion opens without a G drive connection it prompts errors
 'CS.CreateLocalFile "C:\Users\" & username & "\AppData\Roaming\OCLC\Connex\Db\DefaultAuth.auth.db"
@@ -507,7 +520,7 @@ Dim test As Variant
             CS.GetListItem 1
          End If
          
-         If FetchAllFind("010", LCCN) = "True" Then
+         If FetchAllFind("010", LCCN) = True Then
             
             result = "Found"
             
@@ -537,11 +550,10 @@ saveFileNum = 0
    If CS.ItemType = 3 Or CS.ItemType = 18 Or CS.ItemType = 4 Or CS.ItemType = -1 Then
                
       sDate = FindReplace("/", "-", Date)
-      gDriveAddy = username & "BulkProcess" & sDate & ".auth.db"
        
       'Creates file if doesn't exist, sets as default    
-      CS.CreateLocalFile gDriveAddy 
-      CS.CreateLocalFile gDriveAddy 
+      CS.CreateLocalFile driveaddy & username & "BulkProcess" & sDate & ".auth.db"
+      CS.CreateLocalFile driveaddy & username & "BulkProcess" & sDate & ".auth.db"
                
       'Save to local file, check success
       On Error Resume Next
@@ -567,7 +579,7 @@ End Function
 
 '/==================================================================================
 Function FetchAllFind(field$, find$)
-'Returns a string. Boolean harder to refer to. True if find$ is found in any specified field$
+'Returns a boolean True if find$ is found in any specified field$
 '/================================================================================== 
    Dim CS As Object
    On Error Resume Next
@@ -582,7 +594,7 @@ Function FetchAllFind(field$, find$)
    fieldInstance = 1
    
    Dim bool As Variant
-   bool = "False"
+   bool = False
    tempString = lcase(tempString)
 
    Do Until CS.GetField(field$, fieldInstance, tempString) = False
@@ -590,7 +602,7 @@ Function FetchAllFind(field$, find$)
    tempstring = lcase(FindReplace(" ", "", tempstring))
    
       If InStr(tempString, find$) <> 0 Then
-         bool = "True"
+         bool = True
          Exit Do
       End If 
       
@@ -680,6 +692,7 @@ Function FindReplace(find$, replace$, yourString$)
    FindReplace = editedString
    
 End Function
+
 
 '=====================================================================================
 Function DeleteAllField(tag)
