@@ -1,0 +1,1454 @@
+'MacroName:Authority checker
+'MacroDescription: Checks for coding mistakes in personal, corporate and conference authority records. To be used alongside ID_sus_char.
+'Written by: Hazel Loughrey.
+'Last edit: 22/08/2023
+
+'======================================================= INFO ================================================================= 
+'Please note that these checks are aligned with the standards used by NLNZ. Please adjust to your institution's needs as appropriate.
+'
+'If you are going to add a check, you will need to put a > in error messages in whatever variable you use to return your result. End of this code looks for > and counts errors
+'based off that, and displays only those on the error screen.
+'==============================================================================================================================
+
+'/Declaring functions...
+
+Declare Function StringCounter (yourString$, find$) As Integer
+Declare Function FindReplace(find$, replace$, yourString$) As String
+Declare Function FetchAllFind(field$, find$) As Variant
+Declare Function GetIndicators(field$, instance%) As String
+Declare Function EndsSearch(field$, searchItem$, begOrEnd) As Variant
+Declare Function SingleEndsSearch(field$, fieldInstance%, searchItem$, begOrEnd)
+Declare Function GetSubfield(targetField, instance, targetTag) As String
+Declare Function StripChar(sField, keep) As String
+
+'/This highlights undefined variables and is very useful.
+Option Explicit
+
+Sub Main
+
+'/This stuff gives us the cs shortcut so we dont have to type out connex client every time/
+   Dim CS As Object
+   On Error Resume Next
+   Set CS  = GetObject(,"Connex.Client")
+   On Error GoTo 0
+   If CS  Is Nothing Then
+      Set CS  = CreateObject("Connex.Client")
+   End If
+   
+'/Setting variables that will be used in many checks.../
+   Dim delimiter As String
+   delimiter = Chr$( 223 )
+
+   Dim fieldInstance As Integer
+   fieldInstance = 1
+
+   Dim lineBreak As String
+   lineBreak = Chr(10)
+   
+   Dim holder, x As Integer
+   holder = 1
+   
+   Dim tempString As String
+   
+   Dim bool As Variant
+
+'=====================================================================================
+'Determining record type
+'=====================================================================================   
+   'What I would have liked to do is grab the workform's name. Unfortunately I don't have the command
+   'for that (CS.ItemType exists but all authority records are the same: 18). 
+   'Also doesn't seem to be anything distinct in the leader or 008 that I can use. 
+   '1xx fields will hopefully be good enough. This should make the rest of the code easier to read
+   '& saves us repeatedly fetching the 1xx field.
+   
+   
+   
+   Dim nameField100, corpBody110, conference111, recordType, accessPoint As String
+
+
+   If CS.GetFieldUnicode("100", 1, nameField100) Then
+   
+      recordType = "Personal"
+      accessPoint = nameField100
+      
+      
+   ElseIf CS.GetFieldUnicode("110", 1, corpBody110) Then
+   
+      recordType = "Corporate"
+      accessPoint = corpBody110
+      
+   ElseIf CS.GetFieldUnicode("111", 1, conference111) Then
+   
+      recordType = "Conference"
+      accessPoint = conference111
+      
+   Else
+      
+      MsgBox "Oops." & lineBreak & "Either a record is not open or you are missing a 1xx field." & lineBreak & "Please fix and run checker again."
+      Exit Sub
+      
+   End If
+  
+  Dim unreadMessage as String
+ 
+'====================================================================================
+'Check for non-numeric tags
+'====================================================================================  
+'If the field tag isn't right we can't get its contents, so it can't be checked or edited. Linked convert diacritics macro will misbehave if there are unreadable field tags.
+   holder = 1
+   Dim fieldContent, tagError As String
+   tagError = "READ ERROR/S: " + lineBreak + lineBreak
+   
+   Do Until CS.GetFieldLineUnicode(holder, fieldContent) = False
+      
+      If Not Mid(fieldContent, 1, 3) Like "[0-9][0-9][0-9]" Then
+      
+         If Mid(fieldContent, 1, 3) <> "Dat" Then
+            tagError = + tagError + "The field tag on line" + str(holder) + " does not seem to be three digits (" + Mid(fieldContent, 1, 3) + ")" + lineBreak + lineBreak
+         End If
+      End If
+      
+   holder = holder + 1
+   Loop
+   
+   If tagError <> "READ ERROR/S: " + lineBreak + lineBreak Then
+      
+      tagError = tagError + + "Please correct and run macro again."
+      MsgBox(tagError)
+      Exit Sub
+      
+   End If 
+   
+'=====================================================================================
+'008 source check
+'=====================================================================================
+
+   dim sourceCodeResult as String
+   dim sourceCode as String 
+   
+'/Gets whatever is in the Source field of the 008, put that into sourceCode variable/
+   CS.GetFixedField "Source", sourceCode
+   Dim LCCN As String '(Library of Congress Control Number)
+      
+      If sourceCode = "" Then
+         sourceCodeResult = "008: Source code correct."
+      
+      ElseIf sourceCode = "a" Or sourceCode = "b" Or sourceCode = "c" And CS.GetField("010", 1, LCCN) = False Then
+         sourceCodeResult = ">008: Source code incorrect (" & sourceCode & "). Should be blank."
+
+      End If
+      
+      
+      If sourceCodeResult = "" Then
+      
+         sourceCodeResult = "008: Checked source code for records without 010."
+         
+      End If 
+
+   
+'=====================================================================================
+'008 ref status check
+'=====================================================================================
+
+Dim nameField400, refCode, refStatusResult, nameField411, nameField500, corpVariant, corpVariant5xx As String
+Dim refPresent As Variant
+
+refPresent = False
+refStatusResult = ">008: Unknown. Please check manually."
+
+'/Gets ref status and puts it in variable refCode/
+   CS.GetFixedField "Ref status", refCode
+   
+   
+   If CS.GetField("400", 1, nameField400) = True Or CS.GetField("500", 1, nameField500) = True Then
+   
+      refPresent = True
+      
+   ElseIf CS.GetField("410", 1, corpVariant) = True Or CS.GetField("510", 1, corpVariant5xx) = True Then
+   
+      refPresent = True
+   
+   ElseIf CS.GetField("411", 1, corpVariant) = True Or CS.GetField("511", 1, corpVariant5xx) = True Then
+   
+      refPresent = True
+   
+   End If
+   
+
+   If refPresent = True Then
+   
+         If refCode = "a" Then
+            refStatusResult = "008: Reference status correct."
+        
+         ElseIf refCode = "n" Or refCode = "b" Then
+            refStatusResult = ">008: Ref status incorrect (" & refCode & "). Should be A."
+            
+         Else
+            refStatusResult = ">008: Ref status should be A."
+            
+      End If
+      
+   
+   
+   ElseIf refPresent = False Then
+   
+         If refCode = "a" or refCode = "b" Then
+         refStatusResult = ">008: Ref status incorrect (" & refCode & "). Should be N."
+   
+         ElseIf refCode = "n" Then
+            refStatusResult = "008: Reference status correct."
+            
+         Else
+            refStatusResult = ">008: Ref status should be N."
+
+      End If
+   
+   End If
+   
+'=====================================================================================
+'008 rule checker
+'=====================================================================================
+
+'Checks 008 Rules is set to z (rda)
+
+'/Declares variables/
+   Dim ruleCode as String
+   Dim ruleCodeResult as String 
+
+   
+'/Gets whatever is in the Rules field of the 008, put that into variable/
+   CS.GetFixedField "Rules", ruleCode
+   
+   If CS.GetField("010", 1, LCCN) = False Then
+   
+      'New record
+      If ruleCode = "z" Then
+      
+          ruleCodeResult = "008: Set to rda in the 008."
+      
+      Else
+      
+         ruleCodeResult = ">008: Rule code set to " & ruleCode & ". Should be z on new records"
+      
+      End If
+      
+   ElseIf CS.GetField("010", 1, LCCN) = True Then
+   
+      'Old record
+      If ruleCode = "n" Then
+      
+         ruleCodeResult = ">008: Rule code set to n. Should be a, b, c, d, or z."
+      
+      ElseIf ruleCode = "n" Then
+      
+         ruleCodeResult = "008: Rule code set to " & ruleCode & " on existing record"
+      
+      End If
+      
+   End If
+   
+'=====================================================================================
+'024 checker
+'=====================================================================================   
+'Checks indicators and subfield contents of 024  
+   
+
+Dim itype, id, url, idField, idResult As String
+x = 1
+
+idResult= "N/A, no 024s found."
+If CS.GetField("024", 1, idField) = True Then idResult = ""
+
+Do Until CS.GetField("024", x, idField) = False
+
+      If Mid(idField, 1, 5) <> "0247 " Then idResult = idResult + ">024: (" & x & ") First indicator should be 7, second should be blank."+ linebreak
+      
+      On Error Resume Next
+      itype = Trim(GetSubfield("024", x, "2"))
+      id = Trim(GetSubfield("024", x, "a"))
+      url = Trim(GetSubfield("024", x, "1"))
+
+      If Mid(url, 1, 4) <> "http" Then idResult = idResult + ">024: (" & x & ") $1 should probably start with http." + linebreak
+      If InStr(url, id) = 0 Then idResult = idResult + ">024: (" & x & ") URL doesn't contain the id in $a." + linebreak
+            
+      Select Case itype
+      Case "wikidata"
+         If Mid(id, 1, 1) <> "Q" Then idResult = idResult +">024: (" & x & ") Wikidata id should start with Q."+ lineBreak
+         If InStr(url, "entity") = 0 Then idResult = idResult +">024: (" & x & ") Wikidata url missing 'entity'." + linebreak
+      Case "isni", "orcid", "viaf", "ulan"
+          If IsNumeric(Mid(id, 1, 1)) = False Then idResult = idResult + ">024: (" & x & ") $a doesn't start with number, but " + itype + " in $2." + linebreak
+      Case "worldcat", "gettyulan"
+         'we don't use these but they are valid
+      Case Else
+         if itype = "" Then itype = "[null]"
+         idResult = idResult + ">024: (" & x & ") ID type '" & itype & "' not recognised" & linebreak         
+      End Select
+   x = x + 1
+   Loop
+   
+  
+   If idResult = "" Then idResult = "024: Checked beginning of $a and $1. Checked $2 and indicators."
+
+'=====================================================================================
+'040 rda checker
+'=====================================================================================
+
+ '/Checks if there is a 040 field/
+ 
+ Dim rdaRecord As String
+ 
+ Dim rdaRecordResult As String
+      
+   If CS.GetField("040", 1, rdaRecord) = True Then
+   
+ '/If there is a 040 field, checks if that field contains rda/
+   
+      If InStr(rdaRecord, delimiter + "e rda") > 0 Then
+         rdaRecordResult = "040: Rda present."
+         
+         Else
+            rdaRecordResult = ">040: Missing rda"
+
+         End If
+    Else
+'If there is no 040 field, error displays
+ 
+      rdaRecordResult = ">040: Missing 040 field."
+
+   
+    End If
+
+'=====================================================================================
+'046 check
+'=====================================================================================
+
+ '/Checks if 046 contains $2 edtf
+ 
+ Dim codedDate, codedDateResult, corpCodedDateResult As String
+    
+ If CS.GetField("046", 1, codedDate) = True Then
+   
+ '/If there is a 046 field, checks if that field contains edtf/
+   
+      If InStr(codedDate, delimiter + "2 edtf") > 0 Then
+         codedDateResult = "046: Contains $2 edtf."
+         
+      Else
+            codedDateResult = ">046: Missing $2 edtf"
+      
+      End If
+      
+      '-----------------------------------------
+      'Corp body subfield check
+      '-----------------------------------------
+      
+      If recordType = "Corporate" Or recordType = "Conference" Then
+
+         If (InStr(codedDate, delimiter + "s") > 0 ) Or (InStr(codedDate, delimiter + "t") > 0 ) Or (InStr(codedDate, delimiter + "q") > 0 ) Or (InStr(codedDate, delimiter + "r") > 0 ) Then
+         
+               corpCodedDateResult = "046: Subfield present ($s, $t, $q or $r)."
+                 
+         Else
+         
+            corpCodedDateResult = ">046: Missing either $s, $t, $q or $r"
+            
+         End If    
+      
+      End If      
+      
+   Else
+ 
+     codedDateResult = "046: [N/a: No 046 field]."
+
+   
+   End If
+   
+'=====================================================================================
+'100 indicator checker
+'=====================================================================================
+
+
+Dim nameField100Result As String
+
+Dim commaCount As Integer
+
+Dim delimCount As Integer
+
+   If CS.GetFieldUnicode ("100", 1, nameField100) = True Then
+   
+      CS.GetFieldUnicode 100, 1, nameField100
+      commaCount = StringCounter(nameField100, ",")
+      delimCount = StringCounter(nameField100, ", " + delimiter)
+      
+      If InStr(nameField100, "1000") > 0 Then
+   
+         If commaCount = delimCount Then
+            nameField100Result = "100: Indicator is 100 0, and there is no comma in $a."
+         Else
+            nameField100Result = ">100: Indicator is 0, should be 1."
+
+         End If
+      
+      ElseIf InStr(nameField100, "1001")>0 Then
+   
+         If commaCount = delimCount Then
+            nameField100Result = ">100: Indicator is 1, should probably be 0."
+         End If
+      
+      Else
+         
+         nameField100Result = ">100: First indicator should be 1 or 0, second should be blank."
+
+         
+      End If
+      
+   End If
+   
+   If InStr(nameField100, ", " & delimiter & "c") > 0 Or InStr(nameField100, ", " & delimiter & "q") > 0 Then
+      nameField100Result = nameField100Result + ">100 There shouldn't be a comma before $c or $q"
+   End If
+
+'=====================================================================================
+'110 indicator checker
+'=====================================================================================
+
+   
+   If recordType = "Corporate" Then
+
+      Dim corpBody110result As String
+   
+      If Mid(corpBody110, 1, 5) = "1101 " Then
+      
+         If SingleEndsSearch("110", 1, "New Zealand. " + delimiter + "b", "b") = True Then
+         
+            corpBody110result = "110: First indicator correct."
+            
+         Else
+         
+            corpBody110result = ">110: First indicator should be 2. 110 doesn't begin with 'New Zealand.'"
+
+            
+         End If
+         
+      
+      ElseIf Mid(corpBody110, 1, 5) = "1102 " Then
+      
+         If SingleEndsSearch("110", 1, "New Zealand. " + delimiter + "b", "b") = True Then
+         
+            corpBody110result = ">110: First indicator should be 1 as 110 beigns with 'New Zealand.'"
+
+            
+         Else 
+         
+            corpBody110result = "110: Indicators correct."
+            
+         End If
+
+      Else
+      
+            corpBody110result = ">110: First indicator should be 1 or 2. Second indicator should be empty."
+
+      
+      End If
+   
+   End If
+  
+   
+'=====================================================================================
+'111 indicator checker
+'=====================================================================================
+   'conference111 defined in record type section
+   If recordType = "Conference" Then
+   
+   Dim conference111Result As String
+   
+      If InStr(Mid(conference111, 1, 5), "1112 ") > 0 Then
+      
+         conference111Result = "111: Indicators correct."
+         
+      Else
+      
+         conference111Result = ">111: First indicator should be 2. Second indicator should be blank."
+      
+      End If
+   
+   End If
+
+'=====================================================================================
+'368 checker
+'=====================================================================================
+   'Checks for 368 based on 110 contents
+   
+   Dim otherAttributes368 As String
+   Dim otherAttributes368Result As String
+   
+   fieldInstance = 1
+   
+   CS.GetFieldUnicode "368", fieldInstance, otherAttributes368
+   otherAttributes368Result = "368: [N/a]"
+
+   If InStr(corpBody110, "(Firm)") > 0 Then
+      
+       If otherAttributes368 <> "" Then
+       
+         If FetchAllFind("368", "Business enterprises " + delimiter) = False Then
+         
+            otherAttributes368Result = ">368: Missing 'Business enterprises $2 lcsh'"
+            
+         ElseIf FetchAllFind("368", "Business enterprises " + delimiter) = True Then
+         
+            otherAttributes368Result = "368: If (Firm) in 110, matching 368 exists"
+         
+         End If
+
+       Else
+       
+         otherAttributes368Result = ">368: Missing 368 with 'Business enterprises $2 lcsh'"
+       
+       End If
+   
+   ElseIf InStr(corpBody110, "(Musical group)") > 0 Or InStr(corpBody110, "(Musical Group)") > 0 Then
+   
+      If otherAttributes368 <> "" Then
+       
+         If FetchAllFind("368", "Musical groups " + delimiter) = False Then
+         
+            otherAttributes368Result = ">368: Missing 'Musical groups $2 lcsh'"
+            
+         ElseIf FetchAllFind("368", "Musical groups " + delimiter) = True Then
+         
+            otherAttributes368Result = "368: If (Musical group) in 110, matching 368 exists"
+         
+         End If
+
+       Else
+       
+         otherAttributes368Result = ">368: Missing 368 with 'Musical groups $2 lcsh'"
+       
+       End If
+   
+   End If
+   
+'=====================================================================================
+'370 checker
+'=====================================================================================
+   
+   Dim assocPlace As String
+   Dim assocPlaceResult As String
+   fieldInstance = 1
+      
+   assocPlaceResult = "370: NZ naf present if N.Z. in 11x."
+   
+   fieldInstance = 1        
+   
+   bool = False
+   
+   '/Not using FetchAllFind because need to look for two things in a string here
+   
+   Do Until CS.GetFieldUnicode("370", fieldInstance, assocPlace) = False
+
+         If InStr(assocPlace, "New Zealand " + delimiter) > 0 And InStr(assocPlace, delimiter + "2 naf") > 0 Then
+ 
+            bool = True    
+
+         End If
+
+      fieldInstance = fieldInstance + 1
+   
+   Loop
+   
+   
+   '/If (N.Z.) at end of 11x, is there a 370 with the stuff in...
+   If SingleEndsSearch("110", 1, "(N.Z.)", "e") = True Or SingleEndsSearch("111", 1, "(N.Z.)", "e") = True Then
+   
+      If bool = True Then
+      
+         assocPlaceResult = "370: 'New Zealand $2 naf' present with 11x (N.Z.)."
+      
+      ElseIf bool = False then
+      
+         assocPlaceResult = ">370: Missing or misconstructed 370 'New Zealand $2 naf'."
+      
+      End If
+   
+ 
+   End If
+
+'=====================================================================================
+'378 checker
+'=====================================================================================
+
+   Dim FullerFormContent As String
+   Dim fullerFormPresent As String
+   Dim fullerFormResult As String
+
+'-------------------------------------------------
+'If 100 has $q, is there a 378?  
+'-------------------------------------------------
+   '/If nameField100 has a value then
+   If CS.GetFieldUnicode("100", 1, nameField100) = True Then
+   
+      '/if there is a $q in the 100 then
+      If InStr(nameField100, delimiter + "q") > 0 Then
+         
+         'if there is a 378 field then
+         If CS.GetFieldUnicode("378", 1, fullerFormContent) = True Then
+            
+            '/then you have a 378 to go with your 100 $q.
+            fullerFormPresent = "378: present"
+         
+         Else
+            
+            '/you should have a 378 to go with your 100 $q but you do not
+            
+            fullerFormPresent = ">378: 378 missing, but $q in 100"
+
+         
+         End If
+      
+      Else
+      
+         fullerFormPresent = "378: If there was a $q in 100, checked for 378"   
+      
+      End If
+    
+    End If
+   
+ 
+ '---------------------------------------------
+ '/Checks if there is a $q in the 378 field/
+ '----------------------------------------------
+      
+   If CS.GetFieldUnicode("378", 1, fullerFormContent) = True Then
+   
+ '/If there is a 378 field, checks if that field contains delimiter (defined at top) and q/
+   
+      If InStr(fullerFormContent, delimiter + "q") > 0 Then
+         fullerFormResult = "378: $q present"
+         
+         Else
+            fullerFormResult = ">378: Missing $q"
+
+         End If
+   
+   Else
+   
+      fullerFormResult = "378: [N/a: No 378 field]."
+   
+   End If
+   
+'=====================================================================================
+'400 indicator checker
+'=====================================================================================
+
+'/variables/
+
+Dim nameField400Result As String
+
+Dim commaCount400 As Integer
+
+Dim delimCount400 As Integer
+
+nameField400Result = ""
+
+fieldInstance = 1
+   
+'begin a loop until no more 400 fields found
+  
+   Do Until CS.GetFieldUnicode("400", fieldInstance, nameField400) = False
+      
+      ReDim Preserve array400(fieldInstance)
+      
+      CS.GetFieldUnicode 400, fieldInstance, nameField400
+      commaCount400 = StringCounter(nameField400, ",")
+      delimCount400 = StringCounter(nameField400, ", " + delimiter)
+    
+      If InStr(nameField400, "400  ") > 0 Then
+         
+         nameField400Result = nameField400Result + ">400: (" & fieldInstance & ") Missing indicator." + lineBreak
+
+
+      ElseIf InStr(nameField400, "4000 ") = 1 Then
+         
+            
+            If commaCount400 = delimCount400 Then
+
+               
+            Else
+               nameField400Result = nameField400Result + ">400: (" & fieldInstance & ") Indicator is 0, should be 1." + lineBreak
+
+            End If
+            
+      
+      ElseIf InStr(nameField400, "4001 ") = 1 Then
+      
+            If commaCount400 = delimCount400 Then
+               nameField400Result = nameField400Result + ">400: (" & fieldInstance & ") Indicator is 1, should probably be 0."  + lineBreak
+
+            End If
+            
+      Else
+         nameField400Result = nameField400Result + ">400: (" & fieldInstance & ") First indicator should be 1 or 0, second should be blank." + lineBreak
+              
+      End If
+      
+      fieldInstance = fieldInstance + 1 
+         
+   Loop
+   
+
+If nameField400Result = "" And CS.GetFieldUnicode("400", fieldInstance, nameField400) = False Then
+
+  nameField400Result = "400: [N/a. No 400 field]."
+  
+ElseIf nameField400Result = "" And CS.GetFieldUnicode("400", fieldInstance, nameField400) = True Then
+
+   nameField400Result = "400: Indicators correct."
+  
+End If
+
+
+
+'=====================================================================================
+'41x checker
+'=====================================================================================
+'Checks if reo article is at end of string
+
+Dim corpVarArticle As String
+
+If CS.GetFieldUnicode("410", 1, corpVariant) = True Or CS.GetFieldUnicode("411", 1, corpVariant) = True Then
+   
+   Dim maoArticle(1 To 3) As String
+
+   maoArticle(1) = "He"
+   maoArticle(2) = "Te"
+   maoArticle(3) = "Ng&#x0101;"
+   
+   holder = 1
+   
+   For holder = 1 To 3
+   
+      If EndsSearch("110", maoArticle(holder) + " ", "b") = True Or EndsSearch("111", maoArticle(holder)+ " ", "b") = True Then
+         
+         If EndsSearch("410", maoArticle(holder), "e") = False And EndsSearch("411", maoArticle(holder), "e") = False Then
+           
+            'display purposes
+            maoArticle(3) = "Nga"
+            
+            corpVarArticle = ">41x: Missing 41x that ends in '" & maoArticle(holder) & "'"
+            
+         End If
+         
+     End If
+   
+   Next holder
+
+End If
+
+
+If corpVarArticle = "" And CS.GetFieldUnicode("410", 1, corpVariant) = False And CS.GetFieldUnicode("411", 1, corpVariant) = False Then
+   
+   corpVarArticle = "41x: [N/a]."
+   
+ElseIf corpVarArticle = "" Then
+
+   corpVarArticle = "41x: Reo article at end."
+      
+End If
+
+
+'===============================================================================================
+'41x indicator check
+'===============================================================================================
+ 
+  fieldInstance = 1
+  Dim corpVarIndicResult As String
+  Dim variantTag As String
+  variantTag = "410"
+  dim NZstring as string
+  NZstring = "New Zealand. " + delimiter + "b"
+  
+  Do Until CS.GetFieldUnicode(variantTag, fieldInstance, corpVariant) = False
+   
+   If GetIndicators(variantTag, fieldInstance) = "  " Then
+   
+      corpVarIndicResult = corpVarIndicResult + "> " & variantTag & ": (" & fieldInstance & ") Missing indicators." + lineBreak
+   
+   ElseIf SingleEndsSearch(variantTag, fieldInstance, NZstring, "b") = True And GetIndicators(variantTag, fieldInstance) <> "1 " Then
+ 
+      corpVarIndicResult = corpVarIndicResult + "> " & variantTag & ": (" & fieldInstance & ") First indicator should be 1, second should be blank." + lineBreak
+   
+   ElseIf SingleEndsSearch(variantTag, fieldInstance, NZstring, "b") = 0 And GetIndicators(variantTag, fieldInstance) <> "2 " Then
+   
+      corpVarIndicResult = corpVarIndicResult + "> " & variantTag & ": (" & fieldInstance & ") First indicator should be 2, second should be blank." + lineBreak
+  
+   End If
+   
+  fieldInstance = fieldInstance + 1
+  If variantTag = "410" Then
+  
+      If CS.GetFieldUnicode("410", fieldInstance, corpVariant) = False Then
+         variantTag = "411"
+         fieldInstance = 1
+         corpVarIndicResult = corpVarIndicResult + lineBreak
+      End If
+      
+  End If
+
+  Loop
+  
+  If corpVarIndicResult = "" Or corpVarIndicResult = lineBreak Then
+   
+   corpVarIndicResult = "41x: Checked indicators."
+      
+   End If
+   
+'=====================================================================================
+'4xx record type match
+'===================================================================================== 
+
+
+Dim variantMatch As String
+
+If recordType = "Personal" And CS.GetFieldUnicode("410", 1, corpVariant) = True Then
+
+   variantMatch = variantMatch + ">410: Exists, but 100 field present." + lineBreak
+   
+End If
+
+If recordType = "Personal" And CS.GetFieldUnicode("411", 1, corpVariant) = True Then
+
+   variantMatch = variantMatch + ">411: Exists, but 100 field present." + lineBreak
+   
+End If
+   
+If recordType = "Corporate" And CS.GetFieldUnicode("400", 1, nameField400) = True Then
+
+   variantMatch = variantMatch + ">400: Exists, but 110 field present." + lineBreak
+   
+End If
+
+If recordType = "Conference" And CS.GetFieldUnicode("400", 1, nameField400) = True Then
+
+   variantMatch = variantMatch + ">400: Exists, but 111 field present." + lineBreak
+   
+End If
+
+  
+'=====================================================================================
+'510 checker
+'=====================================================================================
+   
+   'basically if $b found and "New Zealand." not found:
+   
+   If InStr(corpBody110, delimiter + "b") > 0 And InStr(corpBody110, "New Zealand. " + delimiter) = 0 Then
+   
+      Dim corpTrace510 As String
+      Dim corpTraceResult As String
+      
+      
+      If FetchAllFind("510", delimiter + "i Hierarchical superior") = False Then
+      
+         corpTraceResult = ">510: Missing 510 with 'Hierarchical superior:' "
+         
+      ElseIf FetchAllFind("510", delimiter + "i Hierarchical superior") = True Then
+      
+         corpTraceResult = "510: Contains 'Hierarchical superior' if 110 $b."
+      
+      End If
+   
+   End If
+   
+   
+'-----------------------------------------------
+'510 subfield check
+'-----------------------------------------------   
+ 
+   Dim corpTraceSubs As String
+   corpTraceSubs = "5xx: [N/a]"  
+   
+   fieldInstance = 1
+   
+   Dim seeAlso5xx As String
+   
+   Dim seeAlsoTag As String
+   
+   Dim seeAlso5xxResult As String
+
+   seeAlsoTag = "500"
+   
+   Do Until CS.GetFieldUnicode("500", fieldInstance, seeAlso5xx) = False And CS.GetFieldUnicode("510", fieldInstance, seeAlso5xx) = False And CS.GetFieldUnicode("511", fieldInstance, seeAlso5xx) = False
+   
+      If CS.GetFieldUnicode(seeAlsoTag, fieldInstance, seeAlso5xx) = True And InStr(seeAlso5xx, delimiter + "i") > 0 Then
+         
+         If InStr(seeAlso5xx, delimiter + "w r") = 0 Then
+      
+            seeAlso5xxResult = seeAlso5xxResult + ">" & seeAlsoTag & ": (" & fieldInstance & ") '$w r' missing." + lineBreak
+         
+         End If
+         
+      End If
+      
+   fieldInstance = fieldInstance + 1 
+   
+   If CS.GetFieldUnicode(seeAlsoTag, fieldInstance, seeAlso5xx) = False And seeAlsoTag = "500" Then
+      
+         seeAlsoTag = "510"
+         fieldInstance = 1
+
+   End If
+      
+   If CS.GetFieldUnicode(seeAlsoTag, fieldInstance, seeAlso5xx) = False And seeAlsoTag = "510" Then
+      
+         seeAlsoTag = "511"
+         fieldInstance = 1
+   
+   End If 
+
+   Loop
+   
+   If seeAlso5xxResult = "" Then
+   
+      seeAlso5xxResult = "5xx: Checked $w r present if $i present."
+      
+   End If
+
+'=====================================================================================
+'670 check
+'=====================================================================================
+
+   Dim bibSourceResult, bibSource, fullerF, prefName, partA, partB, dateSource, temp As String
+   
+   If CS.GetFieldUnicode("670", 1, bibSource) = False Then
+'/Checks there is no 670/
+
+      bibSourceResult = ">670: Missing."
+   
+   Else
+      
+      bibSourceResult = "670: Exists."
+   
+   End If
+   
+'=====================================================================================
+'952 checker
+'=====================================================================================
+
+ Dim nameNote, nameNoteResult As String
+ 
+ If CS.GetFieldUnicode("952", 1, nameNote) = False Then
+      nameNoteResult = ">952: Missing 952"
+  Else 
+      nameNoteResult = "952: Present."
+  End If
+   
+'======================================================================================================================================================
+'Character compliance check
+'======================================================================================================================================================
+  'runs macro from authority checker book. You must have ID_Sus_Charac installed and in the same book with the same names
+
+  
+  'This will only prompt a message box if there are suspicious characters. 
+  'RunMacro is technically a boolean but always returns true, so can't do conditional test here
+  CS.RunMacro("AuthorityChecker.mbk!ID_Sus_Charac")
+
+
+'=================================================================================================================================
+'Message box with results
+'=================================================================================================================================
+   
+'/Array to hold values from all our variables above. Makes them easy to cycle through for display.
+
+Dim messageArray(0 to 30) As String
+   
+   messageArray(0) = sourceCodeResult           '/(008 source code)
+   messageArray(1) = refStatusResult            '/(008 reference status)
+   
+   messageArray(3) = idResult                   '/(024 $1)
+   
+   messageArray(4) = rdaRecordResult            '/(040 rda present)
+   messageArray(5) = codedDateResult            '/(046 $2 edtf present)
+   messageArray(6) = corpCodedDateResult        '/(046 $s or $f present if corp body)
+   
+   messageArray(7) = nameField100Result         '/(100 indicator)
+   messageArray(8) = corpBody110result          '/(110 indicator)
+   messageArray(9) = conference111Result        '/(111 indicators)
+   
+   
+   messageArray(11) = assocPlaceResult          '/(370 New Zealand if (N.Z.) in 110)
+   messageArray(12) = otherAttributes368Result  '/(368 correct if corp body)
+   messageArray(13) = fullerFormPresent         '/(378 $q present)
+   messageArray(14) = fullerFormResult          '/(378 present)
+   
+   messageArray(15) = nameField400Result        '/(400 indicators)
+   messageArray(16) = corpVarArticle            '/(410 ending in articles if first article in 110)
+   messageArray(17) = corpVarIndicResult        '/(410 indicators)
+
+   messageArray(18) = variantMatch              '/(4xx/5xx type matches 1xx type (e.g., personal, corp, etc.))
+   
+   messageArray(19) = corpTraceResult           '/(510 present)
+   messageArray(20) = seeAlso5xxResult          '/(5xx '$w r' present if '$i' present)
+   
+   messageArray(21) = bibSourceResult           '/(670 present)
+   
+   messageArray(22) = nameNoteResult            '/(952 present)
+
+
+'------------------------------------------------
+'Fills variables that will be displayed in boxes.
+'------------------------------------------------
+Dim allErrors, errorMessage, errorMessage2, fullResults, title2 As String
+
+   title2 = "                          What was checked:" & lineBreak & lineBreak
+   holder = 0
+   dim errorCounter as Integer
+
+   Do Until holder >= UBound(messageArray)
+   
+      If InStr(messageArray(holder), ">") > 0 Then
+          
+         allErrors = allErrors + messageArray(holder) + lineBreak + lineBreak
+         
+         title2 = "                      What else was checked:" & lineBreak & lineBreak
+         
+         holder = holder + 1
+    
+      Else
+         fullResults = fullResults + messageArray(holder) + linebreak + linebreak
+         
+         holder = holder + 1
+      End If 
+
+   Loop
+
+  errorCounter = StringCounter(allErrors, ">")
+   
+If errorCounter = 0 Then
+
+   errorMessage = " errors"
+   errorMessage2 = " found. Hooray!"
+   
+ 
+ElseIf errorCounter >= 1 Then
+   
+      If errorCounter = 1 Then
+         errorMessage = " potential error"
+      Else 
+         errorMessage = " potential errors"
+      End If
+      
+   errorMessage2 = " found. Please review:"
+   
+End If
+
+   Dim title as string
+
+   title = lineBreak & "                             " & CStr(errorCounter) & errorMessage & errorMessage2 & lineBreak & lineBreak
+   
+   allErrors = title + FindReplace(linebreak & linebreak & linebreak, linebreak & linebreak, allErrors)
+   
+   fullResults = title2 + FindReplace(linebreak & linebreak & linebreak, linebreak, fullResults)
+   
+
+'/=====================================
+'Box 1: Error display
+'/=====================================
+
+'---------------------------------------
+'Box formatting
+'---------------------------------------
+StartDialogErrors:  
+Dim sizer, okpos, textHeight As Integer
+
+holder = 0
+
+      sizer = 55
+      okpos = 36
+      textHeight = 45
+      holder = 1
+         
+      '/this loop affects the size of the dialog box. for each error it adds 18 points of space
+      
+      Do Until sizer >= 300
+         
+         If errorCounter >= holder Then
+         
+               sizer = sizer + 15
+               okpos = okpos + 15
+               textHeight = textHeight + 15
+               
+               holder = holder + 1
+         Else
+         Exit Do   
+        End If 
+     Loop
+  
+Begin Dialog ErrorBox 242, sizer, "Checking " & LCase(recordType) & " record (" & errorCounter & errorMessage + ")"
+
+   Text  3, 8, 235, textHeight, allErrors
+   
+   PushButton 100, okpos, 40, 16, "Done", .OK
+   PushButton 225, 1, 15, 15, "?", .info
+
+End Dialog
+
+   Dim BoxInfo As ErrorBox
+   Dim ErrorBoxInput As Integer
+   Dim box2Result as string
+   
+   ErrorBoxInput = Dialog(BoxInfo)
+   
+      Select Case ErrorBoxInput
+   
+   Case 1
+      Exit Sub
+      
+   Case 2
+      
+      'GoTo StartDialogSus
+   
+   Case 3 
+
+      GoTo StartDialogErrors2
+          
+   End Select
+
+'/=========================
+'Box 2: Full results
+'/========================    
+
+StartDialogErrors2:     
+Begin Dialog ErrorBox2 175, 310, "Checking - full results"
+
+   
+   Text  3, 8, 170, 285, fullResults
+      PushButton 3, 292, 45, 16, "Done", .OK
+      PushButton 128, 292, 45, 16, "< Back", .Back
+ 
+End Dialog
+
+   Dim BoxInfo2 As ErrorBox2
+   Dim ErrorBoxInput2 As Integer
+   
+   ErrorBoxInput2 = Dialog(BoxInfo2)
+   
+   Select Case ErrorBoxInput2
+   
+   Case 1
+      Exit Sub
+   Case 2
+      GoTo StartDialogErrors
+   End Select
+   
+End Sub
+
+'=====================================================================================
+ Function StringCounter(yourString$, find$)
+'This is a function that counts stuff in a field for you
+'=====================================================================================
+    
+   If InStr(yourString$, find$) > 0 Then
+   
+   Dim count As Integer
+   Dim rightCut, editedString As String
+   
+   editedString = yourString$
+   
+   
+      Do Until InStr(editedString, find$) = 0
+         
+         rightCut = Mid(editedString, InStr(editedString, find$) + Len(find$), Len(editedString))
+         editedString = rightCut
+         count = count + 1
+         
+      Loop
+      
+   End If
+   
+   
+   
+   StringCounter = count
+   End Function
+
+'/==================================================================================
+Function FindReplace(find$, replace$, yourString$)
+'/==================================================================================   
+   Dim CS As Object
+   On Error Resume Next
+   Set CS  = GetObject(,"Connex.Client")
+   On Error GoTo 0
+   If CS  Is Nothing Then
+      Set CS  = CreateObject("Connex.Client")
+   End If
+   
+   Dim editedString, leftCut, rightCut As String
+   
+   editedString = yourString$
+  
+   If InStr(yourString$, find$) > 0 Then
+   
+      Do Until InStr(editedString, find$) = 0
+   
+         leftCut = Left(editedString, InStr(editedString, find$) - 1)
+         rightCut = Mid(editedString, InStr(editedString, find$) + Len(find$), Len(editedString))
+      
+         editedString = leftCut + replace$ + rightCut
+      
+   Loop
+   
+   End If
+
+
+   FindReplace = editedString
+   
+End Function
+
+'/==================================================================================
+Function FetchAllFind(field$, find$)
+'Returns a boolean. True if find$ is found in any specified field$
+'Booleans may display as 0 for false and -1 for true
+'/================================================================================== 
+   Dim CS As Object
+   On Error Resume Next
+   Set CS  = GetObject(,"Connex.Client")
+   On Error GoTo 0
+   If CS  Is Nothing Then
+      Set CS  = CreateObject("Connex.Client")
+   End If
+   
+   Dim tempString As String
+   Dim fieldInstance As Integer
+   
+   fieldInstance = 1
+   
+   Dim bool As Variant
+   bool = False
+
+   Do Until CS.GetFieldUnicode(field$, fieldInstance, tempString) = False
+  
+   
+      If InStr(lCase(tempString), lCase(find$)) <> 0 Then
+      
+         bool = True
+         Exit Do
+
+      Else
+      
+         
+      End If 
+      
+      fieldInstance = fieldInstance + 1 
+   
+   Loop
+
+   FetchAllFind = bool
+End Function
+
+'/==================================================================================
+Function GetIndicators(field$, instance%)
+'/==================================================================================
+Dim CS As Object
+   On Error Resume Next
+   Set CS  = GetObject(,"Connex.Client")
+   On Error GoTo 0
+   If CS  Is Nothing Then
+      Set CS  = CreateObject("Connex.Client")
+   End If
+   
+Dim tempString As String
+
+CS.GetFieldUnicode field$, instance%, tempString$
+
+tempString$ = Mid(tempString$, 4, 2)
+
+GetIndicators = tempString$
+
+
+End Function
+
+'/==================================================================================
+Function EndsSearch(field$, searchItem$, begOrEnd)
+'/==================================================================================
+
+Dim CS As Object
+On Error Resume Next
+Set CS  = GetObject(,"Connex.Client")
+On Error GoTo 0
+If CS  Is Nothing Then
+   Set CS  = CreateObject("Connex.Client")
+End If
+
+Dim fieldInstance As Integer
+fieldInstance = 1
+
+Dim tempString As String
+
+Dim bool As Variant
+bool = False
+
+Do Until CS.GetFieldUnicode(field$, fieldInstance, tempString) = False
+
+      If SingleEndsSearch(field$, fieldInstance, searchItem$, begOrEnd) = True Then
+      
+         bool = True
+         Exit Do
+      
+      End If
+
+   fieldInstance = fieldInstance + 1
+   
+Loop
+
+EndsSearch = bool
+
+
+End Function
+
+'/==================================================================================
+Function SingleEndsSearch(field$, fieldInstance%, searchItem$, begOrEnd)
+'/==================================================================================
+
+Dim CS As Object
+On Error Resume Next
+Set CS  = GetObject(,"Connex.Client")
+On Error GoTo 0
+If CS  Is Nothing Then
+   Set CS  = CreateObject("Connex.Client")
+End If
+
+Dim lenField, lenSearchItem As Integer
+
+Dim tempString As String
+
+Dim bool As Variant
+bool = False
+
+CS.GetFieldUnicode field$, fieldInstance%, tempString
+
+lenSearchItem = Len(searchItem$)
+
+   lenField = Len(tempString$)
+
+   If lenField > lenSearchItem Then
+
+      If begOrEnd = "b" Or begOrEnd = "B" Then
+
+         begOrEnd = Int(6)
+        
+      ElseIf begOrEnd = "e" Or begOrEnd = "E" Then
+
+         begOrEnd = Int(lenField - lenSearchItem) + 1
+         
+
+      End If
+      
+      If InStr(Mid(tempString, begOrEnd, lenSearchItem), searchItem$) <> 0 Then
+   
+         bool = True
+      
+      End If
+   
+   End If  
+
+SingleEndsSearch = bool
+
+
+End Function
+
+'=====================================================================================
+Function GetSubfield(targetField, instance, targetTag)
+'=====================================================================================
+   Dim CS As Object
+   On Error Resume Next
+   Set CS  = GetObject(,"Connex.Client")
+   On Error GoTo 0
+   If CS  Is Nothing Then Set CS  = CreateObject("Connex.Client")
+ 
+   Dim position, endStr, y, snip As Integer
+   Dim targetSubfield, targetFieldData, result As String
+   dim bool as variant
+   
+   If IsNumeric(targetField) Then
+      targetTag = Chr$(223) + targetTag  
+      CS.GetField targetField, instance, targetFieldData
+      If targetFieldData = "" Then
+         GetSubfield = "NULL"
+         GoTo Skip
+      End If
+      targetField = Mid(targetFieldData, 6, Len(targetFieldData)-5) + chr$(223)
+   End If
+   
+   If InStr(targetField, Chr$(223)) = 0 Then
+      y = 0
+      snip = Mid(targetField, 1, 1)
+      bool = True
+      
+      Do While y < 6
+         If Mid(targetField, 1, 1) Like "[0-9]" Then
+            y = y + 1
+            targetField = Trim(Mid(targetField, 2, Len(targetField) -1))
+         Else
+            y = y + 1
+         End If
+      Loop
+      GetSubfield = targetField
+      GoTo Skip
+   End If
+
+   If InStr(Mid(targetField, 1, 1), Chr$(223)) = 0 And targetTag = Chr$(223) + "a" Then
+      targetField = targetTag + targetField
+   End If
+
+   
+   If InStr(targetField, targetTag) <> 0 Then
+      y = 0
+      Do Until InStr(targetField, targetTag) = 0
+      
+         y = y + 1
+         'get past the tag
+         position = InStr(targetField, targetTag) + 2
+      
+         'plus one because I think mid() uses 0 indexing but instr() doesn't
+         targetField = Mid(targetField, position, len(targetField) - position +1)
+   
+         If InStr(targetField, Chr$(223)) > 0 Then
+            endStr = InStr(targetField, Chr$(223)) - 1
+         Else
+            endStr = Len(targetField)
+         End If
+         
+            targetSubfield = Trim(Mid(targetField, 1, endStr))
+         
+         If y > 1 Then result = result + targetTag + targetSubfield
+         If y = 1 Then result = result + targetSubfield
+
+      Loop
+
+   End If
+
+   GetSubfield = Trim(result)
+Skip: 
+End Function
+
+'=================================================================
+Function StripChar(sField, keep)
+'================================================================
+'removes everything except letters and spaces.
+Dim returnString, y As String
+Dim x As Integer
+x = 1
+
+
+
+Do While x <= Len(sField)
+   y = Mid(sField, x, 1)
+   
+   'a regex! yay for regex
+   If y Like "[a-zA-Z" + keep +"]"Then
+         returnString = returnString + y
+   End If
+x = x + 1
+Loop
+
+StripChar = returnString
+End Function
