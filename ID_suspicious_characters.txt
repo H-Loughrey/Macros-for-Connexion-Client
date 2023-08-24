@@ -1,8 +1,8 @@
 'MacroName:ID_Sus_Charac
 'MacroDescription:Tries to identify non-compliant characters by looking for & in strings.
 
-Declare Function StringCounter (yourString$, find$) As Integer
-Declare Function FindReplace(find$, replace$, yourString$) As String
+Declare Function StringCounter (yourString, find) As Integer
+Declare Function FindReplace(find, replace, yourString) As String
 
 Option Explicit
 
@@ -22,10 +22,9 @@ On Error GoTo 0
 
      '-----/variables----------
    
-   Dim holder, fieldInstance, listholder, susCount As Integer
-   holder = 1
+   Dim fieldInstance, listx, susCount As Integer
    fieldInstance = 1
-   listHolder = 1
+   listx = 1
    susCount = 0
    
    Dim x, y, i As Integer      
@@ -42,10 +41,10 @@ On Error GoTo 0
       'Loop until no more lines to check
     
       '|------------------------------------------------------------------------loop 1-----------------------------------------------------------------------------------
-      Do Until CS.GetFieldLine(holder, fieldContent) = False
+      Do Until CS.GetFieldLine(x, fieldContent) = False
       
             '/this one displays "..." unicode as &:            
-            CS.GetFieldLine holder, fieldContent
+            CS.GetFieldLine x, fieldContent
             
             
             fieldTag = Mid(fieldContent, 1, 3)
@@ -123,15 +122,15 @@ On Error GoTo 0
         'control if statement    
         End If
             
-            holder = holder + 1
-            listHolder = listHolder + 1
+            x = x + 1
+            listx = listx + 1
             lastTime = fieldTag
             
 
             Loop
             '------------------------------------------------------------------------loop 1 end--------------------------------------------------------------------------------|
      
-   holder = 0 
+   x = 0 
    CS.GetField fieldTag, fieldInstance, fieldContentHex
 
 
@@ -161,6 +160,8 @@ On Error GoTo 0
    
    If susCount >= 1 Then
       MsgBox("Found " & susCount & " suspicious characters. Please adjust any [?] manually in your record:" & lineBreak & uniResultContext)    
+   Else
+      MsgBox("No suspicious characters found.")
    End If 
       
 End Sub
@@ -188,7 +189,7 @@ Function StringCounter(yourString, find)
    StringCounter = count
    End Function
 '/==================================================================================
-Function FindReplace(find$, replace$, yourString$)
+Function FindReplace(find, replace, yourString)
 '/==================================================================================   
    Dim CS As Object
    On Error Resume Next
@@ -200,14 +201,14 @@ Function FindReplace(find$, replace$, yourString$)
 
    Dim editedString, leftCut, rightCut As String
    
-   editedString = yourString$
+   editedString = yourString
 
-   If InStr(yourString$, find$) Then
+   If InStr(yourString, find) Then
    
-      Do Until InStr(editedString, find$) = 0
-         leftCut = Left(editedString, InStr(editedString, find$) - 1)
-         rightCut = Mid(editedString, InStr(editedString, find$) + Len(find$), Len(editedString))
-         editedString = leftCut + replace$ + rightCut
+      Do Until InStr(editedString, find) = 0
+         leftCut = Left(editedString, InStr(editedString, find) - 1)
+         rightCut = Mid(editedString, InStr(editedString, find) + Len(find), Len(editedString))
+         editedString = leftCut + replace + rightCut
       Loop
    
    End If
@@ -216,4 +217,3 @@ Function FindReplace(find$, replace$, yourString$)
    FindReplace = editedString
    
 End Function
-
