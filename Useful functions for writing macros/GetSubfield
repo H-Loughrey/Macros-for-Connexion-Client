@@ -1,0 +1,64 @@
+'==================================================================================
+'INFO: 
+'Gets the all occurances of subfield. Returns them in a string.
+'e.g. 374 Lawyers $a Teachers $a Anthropologists
+'returns: "$a Lawyers $a Teachers $a Anthropologists
+
+
+'/put this above Sub main:
+Declare Function GetSubfield(targetField, targetTag) As String
+
+
+'/put this below End sub:
+'=====================================================================================
+Function GetSubfield(targetField, instance, targetTag)
+'=====================================================================================
+   Dim CS As Object
+   On Error Resume Next
+   Set CS  = GetObject(,"Connex.Client")
+   On Error GoTo 0
+   If CS  Is Nothing Then Set CS  = CreateObject("Connex.Client")
+
+   Dim position, endStr As Integer
+   Dim targetSubfield, targetFieldData, result As String
+   
+   targetTag = Chr$(223) + targetTag  
+   CS.GetField targetField, instance, targetFieldData
+   If targetFieldData = "" Then
+      GetSubfield = "NULL"
+      GoTo Skip
+   End If
+   targetField = Mid(targetFieldData, 6, Len(targetFieldData)-5) + chr$(223)
+
+   If InStr(Mid(targetField, 1, 1), Chr$(223)) = 0 And targetTag = Chr$(223) + "a" Then
+   
+      targetField = targetTag + targetField
+   
+   End If
+
+   
+   If InStr(targetField, targetTag) <> 0 Then
+
+      Do Until InStr(targetField, targetTag) = 0
+      
+         'get past the tag
+         position = InStr(targetField, targetTag) + 2
+      
+         'plus one because I think mid() uses 0 indexing but instr() doesn't
+         targetField = Mid(targetField, position, len(targetField) - position +1)
+
+         If InStr(targetField, Chr$(223)) Then
+            endStr = InStr(targetField, Chr$(223)) - 1
+         End If
+         
+         targetSubfield = Trim(Mid(targetField, 1, endStr))
+         result = result + targetTag + targetSubfield
+    
+      Loop
+
+   End If
+
+   GetSubfield = Trim(result)
+Skip: 
+End Function
+
